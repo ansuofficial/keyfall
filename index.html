@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Keyfall Typing Defense</title>
+<link rel="stylesheet" href="css/styles.css">
+<script src="js/game.js" defer></script>
+</head>
+<body>
+
+<main class="stage" id="stage">
+  <canvas id="cv" aria-hidden="true"></canvas>
+  <input id="typer" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Type the falling words">
+
+  <div class="hud" id="hud" hidden>
+    <div class="hud-side">
+      <div class="m"><span class="v" id="sScore">0</span><span class="k">Score</span></div>
+      <div class="m"><span class="v" id="sWave">1</span><span class="k">Wave</span></div>
+    </div>
+    <div class="hud-side hud-r">
+      <div class="m"><span class="v" id="sWpm">0</span><span class="k">WPM</span></div>
+      <div class="m"><span class="v" id="sAcc">100%</span><span class="k">Accuracy</span></div>
+    </div>
+  </div>
+
+  <section class="layer" id="start">
+    <div class="start">
+      <button class="btn-primary" id="startBtn" type="button">Start</button>
+      <div class="opts">
+        <button class="opt" id="optSet" type="button"><span>Common words</span><svg viewBox="0 0 8 12" aria-hidden="true"><path d="M1.5 4.5 4 2l2.5 2.5M1.5 7.5 4 10l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="opt" id="optPace" type="button"><span>Normal pace</span><svg viewBox="0 0 8 12" aria-hidden="true"><path d="M1.5 4.5 4 2l2.5 2.5M1.5 7.5 4 10l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <p class="best" id="bestLine" hidden></p>
+    </div>
+  </section>
+
+  <section class="layer scrim" id="pause" hidden>
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+      <div>
+        <h2 id="pauseTitle">Paused</h2>
+        <p>Press <kbd>Esc</kbd> to keep going.</p>
+      </div>
+      <div class="actions">
+        <button class="btn-primary wide" id="resumeBtn" type="button">Resume</button>
+        <button class="btn-text" id="quitBtn" type="button">Quit to start</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="layer scrim" id="over" hidden>
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="overTitle">
+      <div>
+        <h2 id="overTitle">Game over</h2>
+        <p id="rSub">You made it to wave 1.</p>
+      </div>
+      <div class="grid">
+        <div class="tile"><span class="v" id="rWpm">0</span><span class="k">WPM</span></div>
+        <div class="tile"><span class="v" id="rAcc">0%</span><span class="k">Accuracy</span></div>
+        <div class="tile"><span class="v" id="rScore">0</span><span class="k">Score</span></div>
+        <div class="tile"><span class="v" id="rWords">0</span><span class="k">Words cleared</span></div>
+      </div>
+      <p class="note" id="rBest"></p>
+      <div class="actions">
+        <button class="btn-primary wide" id="againBtn" type="button">Play again</button>
+        <button class="btn-text" id="homeBtn" type="button">Back to start</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+</body>
+</html>
