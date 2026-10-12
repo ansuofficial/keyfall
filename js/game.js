@@ -68,6 +68,168 @@ function resize() {
 new ResizeObserver(resize).observe(stage);
 resize();
 
+/* ---------- Sound ---------- */
+/* Every sound is made in the browser with the Web Audio API, so there are no sound files.
+   The numbers are tuned to match the sounds in Keyfall's demo video. */
+const LEVEL = 0.36;
+let soundOn = store("keyfall-sound") !== "off";
+let ac = null, sfx = null;
+const lastSound = {};
+
+function makeSounds() {
+  const sr = ac.sampleRate;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const out = ac.createGain(), bus = ac.createGain(), drive = ac.createGain(), shaper = ac.createWaveShaper();
+  const send = ac.createGain(), room = ac.createConvolver();
+
+  /* Gentle saturation: quiet sounds pass unchanged and loud peaks are rounded off instead of clipped. */
+  const curve = new Float32Array(2048);
+  for (let i = 0; i < curve.length; i++) curve[i] = Math.tanh((i / (curve.length - 1) * 2 - 1) * 2);
+  shaper.curve = curve;
+  shaper.oversample = "2x";
+  drive.gain.value = 0.5;
+
+  /* A small stereo room: decaying noise, different in each ear. */
+  const ir = ac.createBuffer(2, Math.round(sr * 0.7), sr);
+  for (let c = 0; c < 2; c++) {
+    const d = ir.getChannelData(c);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / sr / 0.11);
+  }
+  room.buffer = ir;
+  send.gain.value = 1.1;
+
+  const noise = ac.createBuffer(1, sr, sr), nd = noise.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+
+  bus.connect(drive).connect(shaper).connect(out);
+  bus.connect(send).connect(room).connect(out);
+  out.gain.value = LEVEL;
+  out.connect(ac.destination);
+
+  const env = (g, at, peak, attack, tau, hold = 0) => {
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(peak, at + attack);
+    g.gain.setTargetAtTime(0, at + attack + hold, tau);
+    return at + attack + hold + tau * 8;
+  };
+  const filter = (node, [type, freq, q = 0.707]) => {
+    const f = ac.createBiquadFilter();
+    f.type = type; f.frequency.value = freq; f.Q.value = q;
+    node.connect(f);
+    return f;
+  };
+  const tone = ({ at, freq, to, glide = 0.05, type = "sine", peak, attack = 0.002, hold = 0, tau, lowpass }) => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, at);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, at + glide);
+    const end = env(g, at, peak, attack, tau, hold);
+    (lowpass ? filter(o, ["lowpass", lowpass]) : o).connect(g).connect(bus);
+    o.start(at); o.stop(end);
+  };
+  const hiss = ({ at, peak, attack = 0.0005, tau, shape }) => {
+    const s = ac.createBufferSource(), g = ac.createGain();
+    s.buffer = noise;
+    const end = env(g, at, peak, attack, tau);
+    filter(s, shape).connect(g).connect(bus);
+    s.start(at, Math.random() * 0.5); s.stop(end);
+  };
+
+  return {
+    out,
+    /* A 150 Hz thump, a tick whose pitch changes on every press, and a snap of high noise. */
+    click: at => {
+      const tick = rand(1700, 2300);
+      tone({ at, freq: 150, peak: 0.36, attack: 0.0005, hold: 0.005, tau: 0.015 });
+      tone({ at, freq: tick, to: tick * 0.95, glide: 0.03, peak: 0.22, attack: 0.001, tau: 0.007 });
+      hiss({ at, peak: 0.65, tau: 0.0025, shape: ["highpass", 2500] });
+    },
+    /* Built like the click, but low and dull with a quick downward bend. */
+    wrong: at => {
+      tone({ at, freq: 240, to: 150, glide: 0.09, type: "triangle", peak: 0.3, attack: 0.003, tau: 0.04, lowpass: 1000 });
+      tone({ at, freq: 110, peak: 0.28, tau: 0.025 });
+      hiss({ at, peak: 0.09, tau: 0.003, shape: ["lowpass", 1500] });
+    },
+    /* A rising pop with a small sparkle on two notes of the chime. */
+    pop: at => {
+      const k = rand(0.97, 1.03);
+      tone({ at, freq: 420 * k, to: 1100 * k, glide: 0.035, peak: 0.6, attack: 0.001, tau: 0.02 });
+      hiss({ at, peak: 0.42, tau: 0.003, shape: ["bandpass", 3000 * k, 1] });
+      tone({ at: at + 0.015, freq: 1567.98, peak: 0.14, tau: 0.08 });
+      tone({ at: at + 0.015, freq: 2349.32, peak: 0.1, tau: 0.07 });
+    },
+    /* A soft tone falling an octave over a low thud. */
+    lifeLost: at => {
+      tone({ at, freq: 440, to: 220, glide: 0.4, type: "triangle", peak: 0.21, attack: 0.01, hold: 0.1, tau: 0.15, lowpass: 1400 });
+      tone({ at, freq: 95, to: 55, glide: 0.15, peak: 0.31, attack: 0.003, tau: 0.06 });
+      hiss({ at, peak: 0.1, tau: 0.03, shape: ["lowpass", 400] });
+    },
+    /* C5 E5 G5 D6, each a pair of tones 2.8 Hz apart whose beating makes the shimmer. */
+    newBest: at => {
+      for (const f of [523.25, 659.26, 783.99, 1174.66]) for (const d of [-1.4, 1.4]) {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.frequency.value = f + d;
+        g.gain.setValueAtTime(0, at);
+        g.gain.setTargetAtTime(0.186, at, 0.01);
+        g.gain.setTargetAtTime(0, at + 0.045, 0.42);
+        g.gain.setValueAtTime(0.186 * Math.exp(-(1.2 - 0.045) / 0.42), at + 1.2);
+        g.gain.linearRampToValueAtTime(0, at + 1.55);
+        o.connect(g).connect(bus);
+        o.start(at); o.stop(at + 1.6);
+      }
+    }
+  };
+}
+
+/* Browsers only allow audio after a click or key press, so the audio context is made on first use. */
+function audio() {
+  if (sfx === null) {
+    try {
+      ac = new AudioContext();
+      sfx = makeSounds();
+    } catch (e) {
+      sfx = false; /* no Web Audio in this browser; the game plays silently */
+    }
+  }
+  if (sfx && ac.state !== "running") ac.resume().catch(() => { /* still blocked; the next click or key press tries again */ });
+  return sfx;
+}
+
+function sound(name, delay = 0) {
+  if (!soundOn || !audio()) return;
+  /* Keys pressed together play once. This uses the real clock: the audio clock stands still for a moment after it starts or resumes. */
+  const now = performance.now();
+  if (name in lastSound && now - lastSound[name] < 30) return;
+  lastSound[name] = now;
+  sfx[name](ac.currentTime + delay);
+}
+
+function pauseSound(paused) {
+  if (!ac) return;
+  if (paused) ac.suspend().catch(() => { /* sound keeps running; the game itself is still paused */ });
+  else if (soundOn) ac.resume().catch(() => { /* the next sound tries again */ });
+}
+
+function renderSound() {
+  for (const b of [$("optSound"), $("pauseSound")]) {
+    b.firstElementChild.textContent = soundOn ? "Sound on" : "Sound off";
+    b.setAttribute("aria-label", `Sound: ${soundOn ? "on" : "off"}. Activate to change.`);
+  }
+}
+
+function setSound(on) {
+  soundOn = on;
+  store("keyfall-sound", on ? "on" : "off");
+  renderSound();
+  if (sfx) {
+    const g = sfx.out.gain, t = ac.currentTime;
+    g.cancelScheduledValues(t);
+    if (on) g.setValueAtTime(LEVEL, t);
+    else g.setTargetAtTime(0, t, 0.015);
+  }
+  if (on) sound("click");
+}
+
 /* ---------- Start screen options ---------- */
 function renderOpts() {
   const s = SETS[setIdx], p = PACES[paceIdx];
@@ -75,6 +237,7 @@ function renderOpts() {
   $("optPace").firstElementChild.textContent = p.label;
   $("optSet").setAttribute("aria-label", `Word set: ${s.label}. Activate to change.`);
   $("optPace").setAttribute("aria-label", `Pace: ${p.label}. Activate to change.`);
+  renderSound();
   const best = parseInt(store("keyfall-best-" + s.id) || "0", 10);
   const el = $("bestLine");
   el.hidden = !best;
@@ -82,6 +245,7 @@ function renderOpts() {
 }
 $("optSet").onclick = () => { setIdx = (setIdx + 1) % SETS.length; store("keyfall-set", SETS[setIdx].id); renderOpts(); };
 $("optPace").onclick = () => { paceIdx = (paceIdx + 1) % PACES.length; store("keyfall-pace", PACES[paceIdx].id); renderOpts(); };
+$("optSound").onclick = $("pauseSound").onclick = () => setSound(!soundOn);
 renderOpts();
 
 /* ---------- Game flow ---------- */
@@ -97,6 +261,7 @@ function newGame() {
   nextWave();
   $("start").hidden = true; $("over").hidden = true; $("pause").hidden = true; $("hud").hidden = false;
   updateHud();
+  if (soundOn) audio();
   typer.focus({ preventScroll: true });
 }
 
@@ -111,6 +276,7 @@ function setPaused(p) {
   if (!G || G.state === "over") return;
   G.state = p ? "paused" : "play";
   $("pause").hidden = !p;
+  pauseSound(p);
   if (!p) typer.focus({ preventScroll: true });
 }
 
@@ -133,7 +299,7 @@ function gameOver() {
   const prev = parseInt(store(key) || "0", 10);
   const el = $("rBest");
   el.hidden = !prev && !G.score;
-  if (G.score > prev) { store(key, String(G.score)); el.className = "badge"; el.textContent = "New best score"; }
+  if (G.score > prev) { store(key, String(G.score)); el.className = "badge"; el.textContent = "New best score"; sound("newBest", 0.6); }
   else { el.className = "note"; el.textContent = `Your best: ${prev.toLocaleString()}`; }
   $("over").hidden = false;
   typer.blur();
@@ -186,6 +352,7 @@ function handleChar(raw) {
   if (t.text[t.typed] !== ch) return miss(t);
   t.typed++; t.pending++; G.correct++;
   fire(t);
+  sound("click");
   if (t.typed === t.text.length) {
     t.doomed = true; G.target = null;
     t.pts = t.text.length * 10 * G.wave;
@@ -198,6 +365,7 @@ function miss(t) {
   G.wrong++; G.flash = .3;
   if (t) t.err = .35; else G.turretErr = .35;
   if (!reduceMotion) G.shake = 4;
+  sound("wrong");
   updateHud();
 }
 
@@ -221,6 +389,7 @@ function burst(x, y, colors, n, speed = 190) {
 function explode(w) {
   if (w.dead) return;
   w.dead = true; G.cleared++;
+  sound("pop");
   burst(w.x, w.y, [C.orange, C.orange, C.blue], 28);
   G.rings.push({ x: w.x, y: w.y, r0: 8, r1: 70, life: .5, max: .5, color: C.blue });
   if (w.pts) G.pops.push({ x: w.x, y: w.y - 24, text: "+" + w.pts, life: .9, max: .9 });
@@ -259,6 +428,7 @@ function step(dt) {
       w.dead = true;
       if (G.target === w) G.target = null;
       G.lives--;
+      sound("lifeLost");
       if (G.lives >= 0) G.ringFlash[G.lives] = .7;
       burst(w.x, floorY, [C.red], 22);
       G.rings.push({ x: w.x, y: floorY, r0: 6, r1: 60, life: .6, max: .6, color: C.red });

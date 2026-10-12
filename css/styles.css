@@ -92,6 +92,7 @@ button:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
 }
 .card h2 { margin: 0; font: 600 26px/1.15 var(--font-display); letter-spacing: -0.02em; text-wrap: balance; }
 .card p { margin: 6px 0 0; font-size: 15px; line-height: 1.45; color: var(--ink-2); }
+.card .opt { align-self: center; }
 .card kbd {
   font: 500 12px/1 var(--font-text); color: var(--ink);
   background: var(--cream); border: 1px solid var(--hair); border-radius: 6px; padding: 3px 7px;
