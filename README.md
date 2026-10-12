@@ -18,6 +18,7 @@ Keyfall runs in any modern web browser. There's nothing to install, no account t
 - If a word reaches the ground, you lose a life. The blue ring around the cannon has three parts, one for each life. Lose all three and the game is over.
 - Press **Esc** to pause, and **Esc** again to keep going.
 - On the start screen, click the word set (Common words, Code words or Home row) or the pace (Calm, Normal or Fast) to change it. Your best score for each word set is saved in your browser.
+- Sound is on at first. Click **Sound on** on the start screen to turn it off, and click it again to turn it back on. You can also press **Esc** during a game and use the same button on the Pause card. Your choice is saved in your browser.
 
 ## Change the words
 
